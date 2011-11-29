@@ -1,0 +1,203 @@
+#!/bin/bash
+#
+# An apachectl-style script to control a cron scheduled puppet instance
+#
+# Return codes:
+#  + 0, everything's fine
+#  + 1, something went wrong, look for WARNINGs
+#
+# Written by Marco Bonetti <marco.bonetti@slackware.it>
+#
+
+set -e
+
+# Global variables
+LOCKFILE="/var/lib/puppet/state/puppetdlock"
+
+#
+# pidcheck: check if lock file contains a PID
+# parameters: none
+#
+pidcheck() {
+  head -n 1 ${LOCKFILE} | grep -q -e "^[0-9]\+$" ; echo $?
+}
+
+#
+# running: check if pid written in lock file is running or not
+# parameters: none
+#
+running() {
+  ps -p $(cat ${LOCKFILE} 2>> /dev/null) >> /dev/null 2>&1 ; echo $?
+}
+
+#
+# display_lock: display lock message
+# parameters: none
+#
+display_lock() {
+  if [ -f ${LOCKFILE} ]; then
+    echo "Lock message: \"`cat ${LOCKFILE}`\""
+  else
+    echo "WARNING: missing lock file!"
+    exit 1
+  fi
+}
+
+#
+# enable: enable disabled puppet instance
+# parameters: none
+#
+enable() {
+  if [ -f ${LOCKFILE} ]; then
+    if [ "`pidcheck`" = "0" ]; then
+      # Check if puppet is running
+      if [ "`running`" = "0" ]; then
+	echo "Puppet is currently running"
+      else
+	echo "Removing stale lock file"
+	rm -f ${LOCKFILE}
+      fi
+    else
+      # Remove user defined lock file
+      echo "Enabling puppet instance"
+      rm -f ${LOCKFILE}
+    fi
+  else
+    echo "Instance is already enabled"
+  fi
+}
+
+#
+# disable: disable puppet instance if not already done
+# parameters: "-m" lock message
+#
+disable() {
+  LOCKMSG=""
+  # While loop is a bit overkill now but useful for future switches
+  while [ 0 ]; do
+    if [ "$1" = "-m" -o "$1" = "--message" ]; then
+      LOCKMSG="$2"
+      shift 2
+    else
+      break
+    fi
+  done
+  if [ -z "${LOCKMSG}" ]; then
+    echo "WARNING: missing or empty lock message"
+    exit 1
+  fi
+  # Check and write lock
+  if [ -f ${LOCKFILE} ]; then
+    echo "Lock file already present"
+    display_lock
+  else
+    echo "Disabling puppet instance"
+    echo "${LOCKMSG}" > ${LOCKFILE}
+  fi
+}
+
+#
+# report: if instance is locked, mail current lock message
+# parameters: mail address
+#
+report() {
+  MAILTO=""
+  # While loop is a bit overkill now but useful for future switches
+  while [ 0 ]; do
+    if [ "$1" = "-t" -o "$1" = "--to" ]; then
+      MAILTO="$2"
+      shift 2
+    else
+      break
+    fi
+  done
+  if [ -z "${MAILTO}" ]; then
+    echo "WARNING: missing mail recipient"
+    exit 1
+  fi
+
+  # Check lock file
+  if [ -f ${LOCKFILE} ]; then
+    # Lock file is present
+    LOCKMSG=`cat ${LOCKFILE}`
+    if [ -z "${LOCKMSG}" ]; then
+      # Lock file is empty
+      LOCKMSG="WARNING: empty lock file on `hostname -f`"
+    fi
+    if [ "`pidcheck`" = "0" ]; then
+      # Lock file contains the pid only
+      if [ "`running`" = "0" ]; then
+	LOCKMSG="WARNING: puppet is running with pid ${LOCKMSG} on `hostname -f`"
+      else
+	LOCKMSG="WARNING: puppet is stuck on `hostname -f`"
+      fi
+    fi
+    # Send mail
+    echo "Puppet lock file present, sending email"
+    echo "${LOCKMSG}" | mail -s "Puppet disabled on `hostname -f`" "${MAILTO}"
+  else
+    # Puppet is enabled, nothing to do
+    echo "Puppet is enabled"
+  fi
+}
+
+#
+# run: start a single puppet run
+# parameters: none
+#
+run() {
+  puppetd -t
+}
+
+#
+# status: display puppet instance status
+# parameters: none
+#
+status() {
+  echo -n "Puppet instance is "
+  if [ -f ${LOCKFILE} ]; then
+    echo "locked"
+    display_lock
+  else
+    echo "enabled"
+  fi
+}
+
+#
+# usage: display program usage
+# parameters: none
+#
+usage() {
+  echo "$0 [enable|disable [-m|--message message]|report [-t|--to user@example.com]|run|status]"
+}
+
+# check root
+if [ ! "${EUID}" = "0" ]; then
+  echo "You need root privileges to run $0"
+  exit 1
+fi
+
+case "$1" in
+'enable')
+  enable
+  ;;
+'disable')
+  shift 1
+  disable $@
+  ;;
+'report')
+  shift 1
+  report $@
+  ;;
+'run')
+  run
+  ;;
+'status')
+  status
+  ;;
+*)
+  usage
+  ;;
+esac
+
+exit 0

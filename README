@@ -1,0 +1,5 @@
+Puppet Control
+
+Puppet Control is a companion for the Puppet M/Collective plugin: it is the local
+version of that wonderful plugin, allowing the administrator to setup the lock
+file, checking the program status and issuing a puppet run.
