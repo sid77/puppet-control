@@ -12,7 +12,7 @@
 set -e
 
 # Global variables
-LOCKFILE="/var/lib/puppet/state/puppetdlock"
+LOCKFILE=${LOCKFILE:-"/var/lib/puppet/state/puppetdlock"}
 
 #
 # pidcheck: check if lock file contains a PID
