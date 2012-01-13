@@ -4,7 +4,7 @@
 #
 # Return codes:
 #  + 0, everything's fine
-#  + 1, something went wrong, look for WARNINGs
+#  + 1, something went wrong, look for WARNINGs or ERRORs
 #
 # Written by Marco Bonetti <marco.bonetti@slackware.it>
 #
@@ -38,7 +38,7 @@ display_lock() {
   if [ -f ${LOCKFILE} ]; then
     echo "Lock message: \"`cat ${LOCKFILE}`\""
   else
-    echo "WARNING: missing lock file!"
+    echo "ERROR: missing lock file!"
     exit 1
   fi
 }
@@ -72,7 +72,7 @@ enable() {
 # parameters: "-m" lock message
 #
 disable() {
-  LOCKMSG=""
+  LOCKMSG="Locked by puppetctl"
   # While loop is a bit overkill now but useful for future switches
   while [ 0 ]; do
     if [ "$1" = "-m" -o "$1" = "--message" ]; then
@@ -83,7 +83,7 @@ disable() {
     fi
   done
   if [ -z "${LOCKMSG}" ]; then
-    echo "WARNING: missing or empty lock message"
+    echo "ERROR: empty lock message"
     exit 1
   fi
   # Check and write lock
@@ -112,7 +112,7 @@ report() {
     fi
   done
   if [ -z "${MAILTO}" ]; then
-    echo "WARNING: missing mail recipient"
+    echo "ERROR: missing mail recipient"
     exit 1
   fi
 
