@@ -167,7 +167,8 @@ run() {
 #
 lockedrun() {
   enable
-  run $@
+  # run with "|| true" so it locks even after troubles
+  run $@ || true
   disable
 }
 
