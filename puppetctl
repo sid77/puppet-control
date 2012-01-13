@@ -69,7 +69,7 @@ enable() {
 
 #
 # disable: disable puppet instance if not already done
-# parameters: "-m" lock message
+# parameters: "-m", optional lock message
 #
 disable() {
   LOCKMSG="Locked by puppetctl"
@@ -143,10 +143,32 @@ report() {
 
 #
 # run: start a single puppet run
-# parameters: none
+# parameters: "-e", optional puppet environment
 #
 run() {
-  puppetd -t
+  OPTIONS="-t"
+  ENVIRONMENT=""
+  # While loop is a bit overkill now but useful for future switches
+  while [ 0 ]; do
+    if [ "$1" = "-e" -o "$1" = "--environment" ]; then
+      ENVIRONMENT="--environment $2"
+      shift 2
+    else
+      break
+    fi
+  done
+  OPTIONS="${OPTIONS} ${ENVIRONMENT}"
+  puppetd ${OPTIONS}
+}
+
+#
+# lockedrun: start a single puppet run, locking it after the run completes
+# parameters: "-e", optional puppet environment
+#
+lockedrun() {
+  enable
+  run $@
+  disable
 }
 
 #
@@ -168,7 +190,7 @@ status() {
 # parameters: none
 #
 usage() {
-  echo "$0 [enable|disable [-m|--message message]|report [-t|--to user@example.com]|run|status]"
+  echo "$0 [enable|disable [-m|--message message]|report [-t|--to user@example.com]|run [-e|--environment environment]|lockedrun [-e|--environment environment]|status]"
 }
 
 # check root
@@ -190,7 +212,8 @@ case "$1" in
   report $@
   ;;
 'run')
-  run
+  shift 1
+  run $@
   ;;
 'status')
   status
