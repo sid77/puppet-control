@@ -215,6 +215,10 @@ case "$1" in
   shift 1
   run $@
   ;;
+'lockedrun')
+  shift 1
+  lockedrun $@
+  ;;
 'status')
   status
   ;;
