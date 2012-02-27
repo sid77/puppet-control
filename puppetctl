@@ -174,7 +174,13 @@ status() {
 # parameters: none
 #
 usage() {
-  echo "$0 [enable|disable [-m|--message message]|report [-t|--to user@example.com]|run [puppet agent options]|lockedrun [puppet agent options]|status]"
+  echo -e "Puppet control usage:"
+  echo -e "\t$0 [enable|disable|report|run|lockedrun|status] [command options]"
+  echo -e "Available command options:"
+  echo -e "\tdisable [-m|--message] message"
+  echo -e "\treport [-t|--to] user@example.com"
+  echo -e "\trun [any puppet agent options]"
+  echo -e "\tlockedrun [any puppet agent options]"
 }
 
 # check root
