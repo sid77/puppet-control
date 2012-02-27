@@ -12,14 +12,21 @@
 set -e
 
 # Global variables
-LOCKFILE=${LOCKFILE:-"/var/lib/puppet/state/puppetdlock"}
+LOCKFILE=${LOCKFILE:-"$(puppet agent --genconfig | \
+  grep puppetdlockfile | \
+  cut -d "=" -f 2 | \
+  sed -e 's:^\ ::g')"}
+PIDILE=${PIDILE:-"$(puppet agent --genconfig | \
+  grep pidfile | \
+  cut -d "=" -f 2 | \
+  sed -e 's:^\ ::g')"}
 
 #
 # pidcheck: check if lock file contains a PID
 # parameters: none
 #
 pidcheck() {
-  head -n 1 ${LOCKFILE} | grep -q -e "^[0-9]\+$" ; echo $?
+  head -n 1 ${PIDFILE} | grep -q -e "^[0-9]\+$" ; echo $?
 }
 
 #
@@ -27,7 +34,7 @@ pidcheck() {
 # parameters: none
 #
 running() {
-  ps -p $(cat ${LOCKFILE} 2>> /dev/null) >> /dev/null 2>&1 ; echo $?
+  ps -p $(cat ${PIDFILE} 2>> /dev/null) >> /dev/null 2>&1 ; echo $?
 }
 
 #
@@ -48,22 +55,23 @@ display_lock() {
 # parameters: none
 #
 enable() {
-  if [ -f ${LOCKFILE} ]; then
-    if [ "`pidcheck`" = "0" ]; then
-      # Check if puppet is running
-      if [ "`running`" = "0" ]; then
-	echo "Puppet is currently running"
-      else
-	echo "Removing stale lock file"
-	rm -f ${LOCKFILE}
-      fi
+  if [ "`pidcheck`" = "0" ]; then
+    # check puppet pid
+    if [ "`running`" = "0" ]; then
+      # running
+      echo "Puppet is currently running"
     else
-      # Remove user defined lock file
-      echo "Enabling puppet instance"
-      rm -f ${LOCKFILE}
+      # not running, cleanup
+      echo "Removing stale pid file"
+      rm -f ${PIDFILE}
+      echo "Enabling puppet agent"
+      puppet agent --enable
     fi
   else
-    echo "Instance is already enabled"
+    # old style lock file
+    echo "Enabling puppet instance"
+    rm -f ${PIDFILE}
+    puppet agent --enable
   fi
 }
 
@@ -73,15 +81,9 @@ enable() {
 #
 disable() {
   LOCKMSG="Locked by puppetctl"
-  # While loop is a bit overkill now but useful for future switches
-  while [ 0 ]; do
-    if [ "$1" = "-m" -o "$1" = "--message" ]; then
+  if [ "$1" = "-m" -o "$1" = "--message" ]; then
       LOCKMSG="$2"
-      shift 2
-    else
-      break
-    fi
-  done
+  fi
   if [ -z "${LOCKMSG}" ]; then
     echo "ERROR: empty lock message"
     exit 1
@@ -102,74 +104,55 @@ disable() {
 #
 report() {
   MAILTO=""
-  # While loop is a bit overkill now but useful for future switches
-  while [ 0 ]; do
-    if [ "$1" = "-t" -o "$1" = "--to" ]; then
-      MAILTO="$2"
-      shift 2
-    else
-      break
-    fi
-  done
-  if [ -z "${MAILTO}" ]; then
-    echo "ERROR: missing mail recipient"
+  if [ "$1" = "-t" -o "$1" = "--to" ]; then
+    MAILTO="$2"
+  fi
+  if [ -z "{MAILTO}" ]; then
+    echo "ERROR: empty lock message"
     exit 1
   fi
-
-  # Check lock file
+  # check lock file
   if [ -f ${LOCKFILE} ]; then
-    # Lock file is present
     LOCKMSG=`cat ${LOCKFILE}`
     if [ -z "${LOCKMSG}" ]; then
-      # Lock file is empty
       LOCKMSG="WARNING: empty lock file on `hostname -f`"
     fi
-    if [ "`pidcheck`" = "0" ]; then
-      # Lock file contains the pid only
-      if [ "`running`" = "0" ]; then
-	LOCKMSG="WARNING: puppet is running with pid ${LOCKMSG} on `hostname -f`"
-      else
-	LOCKMSG="WARNING: puppet is stuck on `hostname -f`"
-      fi
-    fi
-    # Send mail
+    # send mail
     echo "Puppet lock file present, sending email"
     echo "${LOCKMSG}" | mail -s "Puppet disabled on `hostname -f`" "${MAILTO}"
   else
-    # Puppet is enabled, nothing to do
+    # puppet is enabled, nothing to do
     echo "Puppet is enabled"
   fi
 }
 
 #
 # run: start a single puppet run
-# parameters: "-e", optional puppet environment
+# parameters: any supported puppet agent parameter
 #
 run() {
-  OPTIONS="-t"
-  ENVIRONMENT=""
-  # While loop is a bit overkill now but useful for future switches
-  while [ 0 ]; do
-    if [ "$1" = "-e" -o "$1" = "--environment" ]; then
-      ENVIRONMENT="--environment $2"
-      shift 2
-    else
-      break
-    fi
-  done
-  OPTIONS="${OPTIONS} ${ENVIRONMENT}"
-  puppetd ${OPTIONS}
+  OPTIONS="-t $@"
+  puppet agent ${OPTIONS}
 }
 
 #
 # lockedrun: start a single puppet run, locking it after the run completes
-# parameters: "-e", optional puppet environment
+# parameters: any supported puppet agent parameter
 #
 lockedrun() {
+  # save lock message, if any
+  LOSCKEDRUNMSG=""
+  if [ -f "${LOCKFILE}" ]; then
+    LOSCKEDRUNMSG=$(cat "${LOCKFILE}")
+  fi
   enable
   # run with "|| true" so it locks even after troubles
-  run $@ || true
-  disable
+  run "$@" || true
+  if [ ! -z "${LOSCKEDRUNMSG}" ]; then
+    disable "${LOSCKEDRUNMSG}"
+  else
+    disable
+  fi
 }
 
 #
@@ -191,7 +174,7 @@ status() {
 # parameters: none
 #
 usage() {
-  echo "$0 [enable|disable [-m|--message message]|report [-t|--to user@example.com]|run [-e|--environment environment]|lockedrun [-e|--environment environment]|status]"
+  echo "$0 [enable|disable [-m|--message message]|report [-t|--to user@example.com]|run [puppet agent options]|lockedrun [puppet agent options]|status]"
 }
 
 # check root
@@ -206,19 +189,19 @@ case "$1" in
   ;;
 'disable')
   shift 1
-  disable $@
+  disable "$@"
   ;;
 'report')
   shift 1
-  report $@
+  report "$@"
   ;;
 'run')
   shift 1
-  run $@
+  run "$@"
   ;;
 'lockedrun')
   shift 1
-  lockedrun $@
+  lockedrun "$@"
   ;;
 'status')
   status
