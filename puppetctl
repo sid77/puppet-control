@@ -27,11 +27,17 @@ PIDFILE=${PIDILE:-"$(puppet agent --genconfig | \
   sed -e 's:^\ ::g')"}
 
 #
-# running: check if pid written in lock file is running or not
+# running: check if written pid is running or not
 # parameters: none
 #
 running() {
-  ps -p $(cat ${PIDFILE} 2>> /dev/null) >> /dev/null 2>&1 ; echo $?
+  if [ -r ${LOCKFILE} ]; then
+    ps -p $(cat ${LOCKFILE} 2>> /dev/null) >> /dev/null 2>&1 ; echo $?
+  elif [ -r ${PIDFILE} ]; then
+    ps -p $(cat ${PIDFILE} 2>> /dev/null) >> /dev/null 2>&1 ; echo $?
+  else
+    echo 1
+  fi
 }
 
 #
