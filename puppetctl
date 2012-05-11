@@ -27,18 +27,6 @@ PIDFILE=${PIDILE:-"$(puppet agent --genconfig | \
   sed -e 's:^\ ::g')"}
 
 #
-# pidcheck: check if lock file contains a PID
-# parameters: none
-#
-pidcheck() {
-  if [ -r ${PIDFILE} ]; then
-    head -q -n 1 ${PIDFILE} | grep -q -e "^[0-9]\+$" ; echo $?
-  else
-    echo "1"
-  fi
-}
-
-#
 # running: check if pid written in lock file is running or not
 # parameters: none
 #
@@ -64,20 +52,11 @@ display_lock() {
 # parameters: none
 #
 enable() {
-  if [ "`pidcheck`" = "0" ]; then
-    # check puppet pid
-    if [ "`running`" = "0" ]; then
-      # running
+  # check if already running
+  if [ "`running`" = "0" ]; then
       echo "Puppet is currently running"
-    else
-      # not running, cleanup
-      echo "Enabling puppet instance"
-      rm -f ${LOCKFILE}
-      rm -f ${PIDFILE}
-      puppet agent --enable
-    fi
   else
-    # old style lock file
+    # enable instance
     echo "Enabling puppet instance"
     rm -f ${LOCKFILE}
     rm -f ${PIDFILE}
