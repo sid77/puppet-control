@@ -11,12 +11,17 @@
 
 set -e
 
+# Read default values
+if [ -r /etc/default/puppetctl ]; then
+  . /etc/default/puppetctl
+fi
+
 # Global variables
 LOCKFILE=${LOCKFILE:-"$(puppet agent --genconfig | \
   grep puppetdlockfile | \
   cut -d "=" -f 2 | \
   sed -e 's:^\ ::g')"}
-PIDILE=${PIDILE:-"$(puppet agent --genconfig | \
+PIDFILE=${PIDILE:-"$(puppet agent --genconfig | \
   grep pidfile | \
   cut -d "=" -f 2 | \
   sed -e 's:^\ ::g')"}
@@ -26,7 +31,11 @@ PIDILE=${PIDILE:-"$(puppet agent --genconfig | \
 # parameters: none
 #
 pidcheck() {
-  head -n 1 ${PIDFILE} | grep -q -e "^[0-9]\+$" ; echo $?
+  if [ -r ${PIDFILE} ]; then
+    head -q -n 1 ${PIDFILE} | grep -q -e "^[0-9]\+$" ; echo $?
+  else
+    echo "1"
+  fi
 }
 
 #
@@ -62,14 +71,15 @@ enable() {
       echo "Puppet is currently running"
     else
       # not running, cleanup
-      echo "Removing stale pid file"
+      echo "Enabling puppet instance"
+      rm -f ${LOCKFILE}
       rm -f ${PIDFILE}
-      echo "Enabling puppet agent"
       puppet agent --enable
     fi
   else
     # old style lock file
     echo "Enabling puppet instance"
+    rm -f ${LOCKFILE}
     rm -f ${PIDFILE}
     puppet agent --enable
   fi
@@ -80,7 +90,7 @@ enable() {
 # parameters: "-m", optional lock message
 #
 disable() {
-  LOCKMSG="Locked by puppetctl"
+  LOCKMSG="Locked by: $(who -s | grep -m 1 $(ps --no-headers -p$$ -o tname=))"
   if [ "$1" = "-m" -o "$1" = "--message" ]; then
       LOCKMSG="$2"
   fi
