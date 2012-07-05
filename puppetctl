@@ -144,7 +144,7 @@ lockedrun() {
   # run with "|| true" so it locks even after troubles
   run "$@" || true
   if [ ! -z "${LOSCKEDRUNMSG}" ]; then
-    disable "${LOSCKEDRUNMSG}"
+    disable -m "${LOSCKEDRUNMSG}"
   else
     disable
   fi
