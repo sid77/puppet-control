@@ -47,9 +47,9 @@ running() {
 #
 display_lock() {
   if [ -f ${LOCKFILE} ]; then
-    echo "Lock message: \"`cat ${LOCKFILE}`\""
+    echo "Lock message: $(cat ${LOCKFILE})"
     if [ -f ${LOCKDBYFILE} ]; then
-      echo "Locked by: \"`cat ${LOCKDBYFILE}`\"\n"
+      echo "Locked by: $(cat ${LOCKDBYFILE})"
     fi
   else
     echo "ERROR: missing lock file!"
@@ -117,13 +117,13 @@ report() {
   fi
   # check lock file
   if [ -f ${LOCKFILE} ]; then
-    LOCKMSG=`cat ${LOCKFILE}`
+    LOCKMSG=$(cat ${LOCKFILE})
     if [ -z "${LOCKMSG}" ]; then
-      LOCKMSG="WARNING: empty lock file on `hostname -f`"
+      LOCKMSG="WARNING: empty lock file on $(hostname -f)"
     fi
     # send mail
     echo "Puppet lock file present, sending email"
-    echo "${LOCKMSG}" | mail -s "Puppet disabled on `hostname -f`" "${MAILTO}"
+    echo "${LOCKMSG}" | mail -s "Puppet disabled on $(hostname -f)" "${MAILTO}"
   else
     # puppet is enabled, nothing to do
     echo "Puppet is enabled"
