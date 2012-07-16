@@ -21,6 +21,7 @@ LOCKFILE=${LOCKFILE:-"$(puppet agent --genconfig | \
   grep puppetdlockfile | \
   cut -d "=" -f 2 | \
   sed -e 's:^\ ::g')"}
+LOCKDBYFILE=${LOCKBYFILE:-"$(dirname ${LOCKFILE})/puppetdlockby"}
 PIDFILE=${PIDILE:-"$(puppet agent --genconfig | \
   grep pidfile | \
   cut -d "=" -f 2 | \
@@ -47,6 +48,9 @@ running() {
 display_lock() {
   if [ -f ${LOCKFILE} ]; then
     echo "Lock message: \"`cat ${LOCKFILE}`\""
+    if [ -f ${LOCKDBYFILE} ]; then
+      echo "Locked by: \"`cat ${LOCKDBYFILE}`\"\n"
+    fi
   else
     echo "ERROR: missing lock file!"
     exit 1
@@ -65,6 +69,7 @@ enable() {
     # enable instance
     echo "Enabling puppet instance"
     rm -f ${LOCKFILE}
+    rm -f ${LOCKDBYFILE}
     rm -f ${PIDFILE}
     puppet agent --enable
   fi
@@ -75,10 +80,13 @@ enable() {
 # parameters: "-m", optional lock message
 #
 disable() {
-  LOCKMSG="Locked by: $(who -s | grep -m 1 $(ps --no-headers -p$$ -o tname=))"
+  LOCKMSG="Instance locked with puppetctl"
+  LOCKDBY="$(who -s | grep -m 1 $(ps --no-headers -p$$ -o tname=))"
   if [ "$1" = "-m" -o "$1" = "--message" ]; then
       LOCKMSG="$2"
   fi
+  # This check will only fail in case of code errors
+  # (should, at least)
   if [ -z "${LOCKMSG}" ]; then
     echo "ERROR: empty lock message"
     exit 1
@@ -90,6 +98,7 @@ disable() {
   else
     echo "Disabling puppet instance"
     echo "${LOCKMSG}" > ${LOCKFILE}
+    echo "${LOCKDBY}" > ${LOCKDBYFILE}
   fi
 }
 
